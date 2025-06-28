@@ -15,6 +15,11 @@ terraform {
       version = "~> 3.0"
     }
   }
+
+  backend "gcs" {
+    bucket = "nabekou29-terraform-state"
+    prefix = "n8n"
+  }
 }
 
 provider "google" {
