@@ -119,6 +119,21 @@ The project consists of:
    - Update environment variables in `terraform/main.tf`
    - Run `terraform apply` then `./scripts/deploy.sh`
 
+## Code Quality Checks
+
+Always run these checks before applying changes:
+
+```bash
+# Format Terraform files
+cd terraform && terraform fmt
+
+# Validate Terraform configuration
+cd terraform && terraform validate
+
+# Security scan with Trivy
+cd terraform && trivy config .
+```
+
 ## Known Issues and Limitations
 
 1. **429 Errors**: 
