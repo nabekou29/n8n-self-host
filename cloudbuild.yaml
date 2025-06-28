@@ -1,0 +1,33 @@
+steps:
+  # Build custom n8n Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/n8n/n8n:latest'
+      - '-f'
+      - 'docker/Dockerfile'
+      - './docker'
+
+  # Push image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/n8n/n8n:latest'
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_SERVICE_NAME}'
+      - '--image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/n8n/n8n:latest'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+
+substitutions:
+  _SERVICE_NAME: n8n
+  _REGION: us-central1
+
+options:
+  logging: CLOUD_LOGGING_ONLY
