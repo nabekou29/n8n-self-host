@@ -139,7 +139,8 @@ resource "google_cloud_run_v2_service" "n8n" {
           memory = "1Gi"
         }
 
-        cpu_idle = true
+        cpu_idle          = true
+        startup_cpu_boost = true
       }
 
       volume_mounts {
@@ -180,7 +181,7 @@ resource "google_cloud_run_v2_service" "n8n" {
 
       env {
         name  = "N8N_HOST"
-        value = "${var.service_name}-${var.project_id}.${var.region}.run.app"
+        value = var.custom_domain != "" ? var.custom_domain : "${var.service_name}-${var.project_id}.${var.region}.run.app"
       }
 
       env {
@@ -190,7 +191,7 @@ resource "google_cloud_run_v2_service" "n8n" {
 
       env {
         name  = "WEBHOOK_URL"
-        value = "https://${var.service_name}-${var.project_id}.${var.region}.run.app/"
+        value = var.custom_domain != "" ? "https://${var.custom_domain}/" : "https://${var.service_name}-${var.project_id}.${var.region}.run.app/"
       }
 
       env {
@@ -296,6 +297,23 @@ resource "google_cloud_run_service_iam_member" "n8n_public" {
   member   = "allUsers"
 }
 
+# Domain mapping for custom domain
+resource "google_cloud_run_domain_mapping" "n8n_domain" {
+  count    = var.custom_domain != "" ? 1 : 0
+  name     = var.custom_domain
+  location = var.region
+
+  metadata {
+    namespace = var.project_id
+  }
+
+  spec {
+    route_name = google_cloud_run_v2_service.n8n.name
+  }
+
+  depends_on = [google_cloud_run_v2_service.n8n]
+}
+
 # Cloud Build service account permissions
 resource "google_project_iam_member" "cloudbuild_run_admin" {
   project = var.project_id
@@ -303,10 +321,10 @@ resource "google_project_iam_member" "cloudbuild_run_admin" {
   member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
 }
 
-resource "google_project_iam_member" "cloudbuild_sa_user" {
-  project = var.project_id
-  role    = "roles/iam.serviceAccountUser"
-  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
+resource "google_service_account_iam_member" "cloudbuild_n8n_sa_user" {
+  service_account_id = google_service_account.n8n_runner.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
 }
 
 resource "google_project_iam_member" "cloudbuild_artifact_registry" {
