@@ -1,32 +1,32 @@
-# N8N Self-Host on Google Cloud Run
+# n8n Self-Host on Google Cloud Run
 
-Cloud RunでN8Nをセルフホストするためのインフラストラクチャコード
+Cloud Runでn8nをセルフホストするためのインフラストラクチャコード
 
 ## アーキテクチャ
 
-このソリューションは、コスト最適化のためにSQLite + ローカルストレージ方式を採用しています：
+このソリューションは、Cloud Run上で公式n8nイメージを使用し、SQLiteデータベースをGCS FUSEボリュームで永続化しています：
 
-- **起動時**: GCSからSQLiteデータベースを復元
-- **実行中**: ローカルファイルシステムでSQLiteを使用（高速）
-- **終了時**: SQLiteデータベースをGCSにバックアップ
-- **定期バックアップ**: 5分ごとに自動バックアップ
+- **データベース**: SQLiteをGCS上に保存
+- **永続化**: Cloud RunのGCS FUSEボリュームマウント機能を使用
+- **コスト**: ほぼゼロ（GCSストレージのみ）
 
 ### メリット
+
 - 月額コストがほぼゼロ（GCSストレージのみ）
-- GCS FUSEの429エラーを回避
-- SQLiteの高速性を維持
+- 設定がシンプル
+- 自動的にデータが永続化される
 
 ### デメリット
-- 予期しないクラッシュ時のデータロスリスク（最大5分）
-- 起動時間がデータベースサイズに依存
+
+- GCS FUSEのパフォーマンス制限
 - 大規模なデータベースには不向き
+- 429エラーが発生する可能性
 
 ## 必要な環境
 
 - Google Cloud アカウント
 - Terraform >= 1.0
 - gcloud CLI
-- Docker
 - 適切な権限（Project Editor以上）
 
 ## デプロイ手順
@@ -64,15 +64,9 @@ terraform plan
 terraform apply
 ```
 
-### 4. カスタムDockerイメージのデプロイ
+### 4. サービスの確認
 
-```bash
-# プロジェクトルートに戻る
-cd ..
-
-# Cloud Build経由でデプロイ
-./scripts/deploy.sh
-```
+Terraform applyが完了すると、n8nサービスが自動的にデプロイされます。
 
 ### 5. アクセス情報の取得
 
@@ -103,56 +97,42 @@ gcloud run services logs read n8n --region=us-central1 --limit=50
 ## データ管理
 
 ### 現在のデータベース
+
 ```bash
 gsutil ls -l gs://${PROJECT_ID}-n8n-data/
 ```
 
 ### 定期バックアップ
+
 ```bash
 gsutil ls -l gs://${PROJECT_ID}-n8n-data/periodic/
 ```
 
 ### タイムスタンプ付きバックアップ
+
 ```bash
 gsutil ls -l gs://${PROJECT_ID}-n8n-data/backup/
 ```
 
 ### 手動バックアップ
+
 ```bash
-./scripts/backup-n8n.sh
-```
-
-## トラブルシューティング
-
-### 429エラーが発生する場合
-
-Cloud Runサービスへの429エラーの場合：
-```bash
-# 並行処理数を増やす
-gcloud run services update n8n --region=us-central1 --concurrency=10
-```
-
-### データベースが復元されない場合
-```bash
-# GCSバケットの内容を確認
-gsutil ls -la gs://${PROJECT_ID}-n8n-data/
-```
-
-### ログの確認
-```bash
-# Cloud Runのログを確認
-gcloud run services logs read n8n --region=us-central1 --limit=100
+# データベースファイルを直接コピー
+gsutil cp gs://${PROJECT_ID}-n8n-data/database.sqlite ./backup-$(date +%Y%m%d-%H%M%S).sqlite
 ```
 
 ## メンテナンス
 
 ### イメージの更新
+
 ```bash
-# n8nの新バージョンに更新
-./scripts/deploy.sh
+# Terraformでイメージを更新
+cd terraform
+terraform apply -var="n8n_image_tag=latest"
 ```
 
 ### データベースの最適化
+
 ```bash
 # データベースをダウンロードして最適化
 gsutil cp gs://${PROJECT_ID}-n8n-data/database.sqlite /tmp/
@@ -173,17 +153,13 @@ gsutil cp /tmp/database.sqlite gs://${PROJECT_ID}-n8n-data/
 
 ```
 .
-├── docker/                 # カスタムDockerイメージ
-│   ├── Dockerfile
-│   └── docker-entrypoint.sh
-├── scripts/               # デプロイ・管理スクリプト
-│   ├── deploy.sh
-│   └── backup-n8n.sh
 ├── terraform/             # インフラストラクチャ定義
-│   ├── main.tf
-│   ├── variables.tf
-│   └── outputs.tf
-└── cloudbuild.yaml        # Cloud Build設定
+│   ├── main.tf           # メインのリソース定義
+│   ├── variables.tf      # 変数定義
+│   ├── outputs.tf        # 出力定義
+│   └── backend.tf        # Terraformステート設定
+├── README.md             # このファイル
+└── CLAUDE.md             # Claude Code用ガイドライン
 ```
 
 ## クリーンアップ
@@ -193,6 +169,3 @@ cd terraform
 terraform destroy
 ```
 
-## ライセンス
-
-MIT

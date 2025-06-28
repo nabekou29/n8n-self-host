@@ -9,30 +9,28 @@ This repository contains infrastructure code for self-hosting n8n workflow autom
 ## Current Architecture
 
 ```
-Cloud Run (n8n) ←→ Local SQLite ←→ GCS Backup
+Cloud Run (n8n) ←→ SQLite on GCS FUSE Volume
 ```
 
-- **No GCS FUSE**: Avoids 429 rate limit errors
-- **Local SQLite**: Runs in container memory for performance
-- **GCS Sync**: Backup/restore on startup/shutdown + periodic backups
+- **GCS FUSE Volume**: Cloud Run's built-in volume mount for persistence
+- **SQLite Database**: Stored directly on GCS through FUSE mount
+- **Simple Setup**: No custom Docker image needed
 
 ## Important Commands
 
 ### Initial Setup and Deployment
+
 ```bash
 # 1. Initialize Terraform (from terraform directory)
 cd terraform
 terraform init
 
-# 2. Create infrastructure
+# 2. Create infrastructure and deploy n8n
 terraform apply
-
-# 3. Deploy n8n with Cloud Build
-cd ..
-./scripts/deploy.sh
 ```
 
 ### Access Information
+
 ```bash
 cd terraform
 
@@ -47,19 +45,21 @@ terraform output -raw encryption_key
 ```
 
 ### Backup Operations
-```bash
-# Run manual backup (from project root)
-./scripts/backup-n8n.sh
 
-# Check automatic backups
-gsutil ls gs://${PROJECT_ID}-n8n-data/periodic/
-gsutil ls gs://${PROJECT_ID}-n8n-data/backup/
+```bash
+# Manual backup of database
+gsutil cp gs://${PROJECT_ID}-n8n-data/database.sqlite ./backup-$(date +%Y%m%d-%H%M%S).sqlite
+
+# Check database file
+gsutil ls -l gs://${PROJECT_ID}-n8n-data/
 ```
 
 ### Updates and Redeployment
+
 ```bash
-# Deploy updates via Cloud Build
-./scripts/deploy.sh
+# Update via Terraform
+cd terraform
+terraform apply
 ```
 
 ## Architecture Details
@@ -67,37 +67,23 @@ gsutil ls gs://${PROJECT_ID}-n8n-data/backup/
 The project consists of:
 
 1. **Cloud Run Service**: Hosts n8n application with concurrency=10
-2. **Cloud Storage**: Two buckets - one for database/backups, one for state
-3. **Custom Docker Image**: Handles database sync with GCS
-4. **Terraform**: Manages all infrastructure including Artifact Registry
-5. **Cloud Build**: Builds and deploys the custom Docker image
+2. **Cloud Storage**: Two buckets - one for database, one for backups
+3. **Official n8n Image**: Uses n8nio/n8n:latest
+4. **Terraform**: Manages all infrastructure
+5. **GCS FUSE**: Provides persistent volume for SQLite
 
-## Custom Docker Implementation
+## Volume Mount Configuration
 
-### Entrypoint Script Flow
-1. **Startup**: Download database.sqlite from GCS (if exists)
-2. **Runtime**: SQLite runs locally in container
-3. **Periodic**: Backup to GCS every 5 minutes
-4. **Shutdown**: Upload database.sqlite to GCS on SIGTERM
-
-### Current Issues
-- Custom entrypoint may not be executing properly
-- Need to investigate n8n's default entrypoint integration
+- SQLite database is stored at `/home/node/.n8n/database.sqlite`
+- GCS bucket is mounted as a volume at `/home/node/.n8n`
+- Data persists automatically through Cloud Run's GCS FUSE integration
 
 ## Directory Structure
 
 ```
 .
 ├── README.md              # Main documentation
-├── guide.md              # Detailed implementation guide
 ├── CLAUDE.md             # This file
-├── cloudbuild.yaml       # Cloud Build configuration
-├── docker/
-│   ├── Dockerfile        # Custom n8n image
-│   └── docker-entrypoint.sh  # Sync script
-├── scripts/
-│   ├── deploy.sh         # Deployment script
-│   └── backup-n8n.sh     # Manual backup script
 └── terraform/
     ├── main.tf           # Resource definitions
     ├── variables.tf      # Variable definitions
@@ -107,17 +93,14 @@ The project consists of:
 
 ## Development Workflow
 
-1. **Infrastructure Changes**: 
+1. **Infrastructure Changes**:
+
    - Modify Terraform files
    - Run `terraform plan` then `terraform apply`
 
-2. **Docker Image Changes**:
-   - Modify files in `docker/` directory
-   - Deploy via `./scripts/deploy.sh`
-
-3. **Configuration Updates**: 
+2. **Configuration Updates**:
    - Update environment variables in `terraform/main.tf`
-   - Run `terraform apply` then `./scripts/deploy.sh`
+   - Run `terraform apply`
 
 ## Code Quality Checks
 
@@ -136,13 +119,15 @@ cd terraform && trivy config .
 
 ## Known Issues and Limitations
 
-1. **429 Errors**: 
-   - GCS FUSE removed but seeing some 429s
-   - May be Cloud Run service limits
+1. **429 Errors**:
+
+   - May occur due to GCS FUSE rate limits
+   - Consider increasing Cloud Run concurrency if needed
 
 2. **Data Persistence**:
-   - Max 5 minute data loss on crash
-   - Startup time increases with database size
+
+   - Data persists automatically through GCS FUSE
+   - No data loss on container restart
 
 3. **Scalability**:
    - Limited to single instance due to SQLite
@@ -150,35 +135,41 @@ cd terraform && trivy config .
 
 ## Troubleshooting
 
-### Check if custom entrypoint is running
+### Check service logs
+
 ```bash
-gcloud run services logs read n8n --region=us-central1 --limit=50 | grep -E "Starting database|Backing up"
+gcloud run services logs read n8n --region=us-central1 --limit=50
 ```
 
 ### Verify GCS bucket contents
+
 ```bash
 gsutil ls -la gs://${PROJECT_ID}-n8n-data/
 ```
 
 ### Force container restart
+
 ```bash
 gcloud run services update n8n --region=us-central1 --update-env-vars=FORCE_RESTART=$(date +%s)
 ```
 
 ## Future Improvements
 
-1. **Fix custom entrypoint execution**
-2. **Migrate to Cloud SQL for production**
-3. **Add monitoring and alerting**
-4. **Implement proper health checks**
+1. **Migrate to Cloud SQL for production scale**
+2. **Add monitoring and alerting**
+3. **Implement automated backups to separate bucket**
+4. **Add custom domain configuration**
 
 ## Cost Optimization
 
 Current setup costs approximately:
+
 - Cloud Run: $0-50/month (depends on usage)
 - Cloud Storage: <$1/month
 - Total: **<$51/month**
 
 For production, add Cloud SQL:
+
 - db-f1-micro: +$10/month
 - db-g1-small: +$50/month (recommended)
+

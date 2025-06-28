@@ -2,9 +2,7 @@
 resource "google_project_service" "required_apis" {
   for_each = toset([
     "run.googleapis.com",
-    "cloudbuild.googleapis.com",
     "storage.googleapis.com",
-    "artifactregistry.googleapis.com",
     "iam.googleapis.com",
   ])
 
@@ -12,15 +10,6 @@ resource "google_project_service" "required_apis" {
   disable_on_destroy = false
 }
 
-# Artifact Registry repository for custom n8n image
-resource "google_artifact_registry_repository" "n8n_repo" {
-  repository_id = "n8n"
-  location      = var.region
-  format        = "DOCKER"
-  description   = "Docker repository for custom n8n images"
-
-  depends_on = [google_project_service.required_apis]
-}
 
 # Random password generation
 resource "random_password" "n8n_basic_auth" {
@@ -285,7 +274,6 @@ resource "google_cloud_run_v2_service" "n8n" {
   depends_on = [
     google_project_service.required_apis,
     google_service_account.n8n_runner,
-    google_artifact_registry_repository.n8n_repo,
   ]
 }
 
@@ -314,26 +302,3 @@ resource "google_cloud_run_domain_mapping" "n8n_domain" {
   depends_on = [google_cloud_run_v2_service.n8n]
 }
 
-# Cloud Build service account permissions
-resource "google_project_iam_member" "cloudbuild_run_admin" {
-  project = var.project_id
-  role    = "roles/run.admin"
-  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
-}
-
-resource "google_service_account_iam_member" "cloudbuild_n8n_sa_user" {
-  service_account_id = google_service_account.n8n_runner.name
-  role               = "roles/iam.serviceAccountUser"
-  member             = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
-}
-
-resource "google_project_iam_member" "cloudbuild_artifact_registry" {
-  project = var.project_id
-  role    = "roles/artifactregistry.writer"
-  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
-}
-
-# Data source to get project number
-data "google_project" "project" {
-  project_id = var.project_id
-}
