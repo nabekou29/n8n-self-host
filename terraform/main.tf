@@ -12,6 +12,16 @@ resource "google_project_service" "required_apis" {
   disable_on_destroy = false
 }
 
+# Artifact Registry repository for custom n8n image
+resource "google_artifact_registry_repository" "n8n_repo" {
+  repository_id = "n8n"
+  location      = var.region
+  format        = "DOCKER"
+  description   = "Docker repository for custom n8n images"
+
+  depends_on = [google_project_service.required_apis]
+}
+
 # Random password generation
 resource "random_password" "n8n_basic_auth" {
   length  = 16
@@ -120,11 +130,8 @@ resource "google_cloud_run_v2_service" "n8n" {
     timeout                          = "300s"
     max_instance_request_concurrency = 1
 
-    # Volume configuration will be added via gcloud command after deployment
-    # as Terraform doesn't yet support Cloud Storage volume mounts
-
     containers {
-      image = "n8nio/n8n:latest"
+      image = "${var.region}-docker.pkg.dev/${var.project_id}/n8n/n8n:latest"
 
       resources {
         limits = {
@@ -143,6 +150,11 @@ resource "google_cloud_run_v2_service" "n8n" {
       env {
         name  = "DB_SQLITE_DATABASE"
         value = "/home/node/.n8n/database.sqlite"
+      }
+
+      env {
+        name  = "GCS_BUCKET_NAME"
+        value = google_storage_bucket.n8n_data.name
       }
 
       env {
@@ -230,7 +242,6 @@ resource "google_cloud_run_v2_service" "n8n" {
         name           = "http1"
       }
 
-      # Volume mount will be configured via gcloud command after deployment
 
       startup_probe {
         http_get {
@@ -257,6 +268,7 @@ resource "google_cloud_run_v2_service" "n8n" {
   depends_on = [
     google_project_service.required_apis,
     google_service_account.n8n_runner,
+    google_artifact_registry_repository.n8n_repo,
   ]
 }
 
@@ -278,6 +290,12 @@ resource "google_project_iam_member" "cloudbuild_run_admin" {
 resource "google_project_iam_member" "cloudbuild_sa_user" {
   project = var.project_id
   role    = "roles/iam.serviceAccountUser"
+  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
+}
+
+resource "google_project_iam_member" "cloudbuild_artifact_registry" {
+  project = var.project_id
+  role    = "roles/artifactregistry.writer"
   member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
 }
 
