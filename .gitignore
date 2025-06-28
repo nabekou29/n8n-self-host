@@ -2,7 +2,7 @@
 *.tfstate
 *.tfstate.*
 .terraform/
-.terraform.lock.hcl
+# .terraform.lock.hcl はバージョン固定のためコミット
 terraform.tfvars
 *.auto.tfvars
 
