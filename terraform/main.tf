@@ -124,7 +124,7 @@ resource "google_cloud_run_v2_service" "n8n" {
     # as Terraform doesn't yet support Cloud Storage volume mounts
 
     containers {
-      image = "docker.n8n.io/n8nio/n8n:latest"
+      image = "n8nio/n8n:latest"
 
       resources {
         limits = {
@@ -182,7 +182,27 @@ resource "google_cloud_run_v2_service" "n8n" {
 
       env {
         name  = "N8N_LOG_LEVEL"
-        value = "warn"
+        value = "info"
+      }
+
+      env {
+        name  = "EXECUTIONS_DATA_SAVE_ON_ERROR"
+        value = "none"
+      }
+
+      env {
+        name  = "EXECUTIONS_DATA_SAVE_ON_SUCCESS"
+        value = "none"
+      }
+
+      env {
+        name  = "EXECUTIONS_DATA_SAVE_ON_PROGRESS"
+        value = "false"
+      }
+
+      env {
+        name  = "N8N_METRICS"
+        value = "false"
       }
 
       env {
@@ -205,23 +225,28 @@ resource "google_cloud_run_v2_service" "n8n" {
         value = "--max-old-space-size=960"
       }
 
+      ports {
+        container_port = 5678
+        name           = "http1"
+      }
+
       # Volume mount will be configured via gcloud command after deployment
 
       startup_probe {
         http_get {
-          path = "/healthz"
+          path = "/"
         }
-        initial_delay_seconds = 0
-        timeout_seconds       = 1
-        period_seconds        = 3
-        failure_threshold     = 3
+        initial_delay_seconds = 10
+        timeout_seconds       = 5
+        period_seconds        = 10
+        failure_threshold     = 5
       }
 
       liveness_probe {
         http_get {
-          path = "/healthz"
+          path = "/"
         }
-        initial_delay_seconds = 30
+        initial_delay_seconds = 60
         timeout_seconds       = 5
         period_seconds        = 30
         failure_threshold     = 3
@@ -241,4 +266,22 @@ resource "google_cloud_run_service_iam_member" "n8n_public" {
   location = var.region
   role     = "roles/run.invoker"
   member   = "allUsers"
+}
+
+# Cloud Build service account permissions
+resource "google_project_iam_member" "cloudbuild_run_admin" {
+  project = var.project_id
+  role    = "roles/run.admin"
+  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
+}
+
+resource "google_project_iam_member" "cloudbuild_sa_user" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountUser"
+  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
+}
+
+# Data source to get project number
+data "google_project" "project" {
+  project_id = var.project_id
 }
