@@ -11,11 +11,6 @@ resource "google_project_service" "required_apis" {
 }
 
 
-# Random password generation
-resource "random_password" "n8n_basic_auth" {
-  length  = 16
-  special = true
-}
 
 resource "random_id" "n8n_encryption_key" {
   byte_length = 16
@@ -153,20 +148,6 @@ resource "google_cloud_run_v2_service" "n8n" {
         value = var.n8n_encryption_key != "" ? var.n8n_encryption_key : random_id.n8n_encryption_key.hex
       }
 
-      env {
-        name  = "N8N_BASIC_AUTH_ACTIVE"
-        value = "true"
-      }
-
-      env {
-        name  = "N8N_BASIC_AUTH_USER"
-        value = var.n8n_basic_auth_user
-      }
-
-      env {
-        name  = "N8N_BASIC_AUTH_PASSWORD"
-        value = var.n8n_basic_auth_password != "" ? var.n8n_basic_auth_password : random_password.n8n_basic_auth.result
-      }
 
       env {
         name  = "N8N_HOST"

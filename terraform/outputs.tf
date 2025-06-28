@@ -23,14 +23,9 @@ output "custom_domain_url" {
   value       = var.custom_domain != "" ? "https://${var.custom_domain}" : "Not configured"
 }
 
-output "n8n_credentials" {
-  description = "N8N access credentials"
-  value = {
-    url      = var.custom_domain != "" ? "https://${var.custom_domain}" : google_cloud_run_v2_service.n8n.uri
-    username = var.n8n_basic_auth_user
-    password = var.n8n_basic_auth_password != "" ? var.n8n_basic_auth_password : random_password.n8n_basic_auth.result
-  }
-  sensitive = true
+output "n8n_url" {
+  description = "N8N service URL"
+  value       = var.custom_domain != "" ? "https://${var.custom_domain}" : google_cloud_run_v2_service.n8n.uri
 }
 
 output "dns_records" {

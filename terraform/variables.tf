@@ -16,18 +16,6 @@ variable "service_name" {
   default     = "n8n"
 }
 
-variable "n8n_basic_auth_user" {
-  description = "N8N basic auth username"
-  type        = string
-  default     = "admin"
-}
-
-variable "n8n_basic_auth_password" {
-  description = "N8N basic auth password"
-  type        = string
-  sensitive   = true
-  default     = ""
-}
 
 variable "n8n_encryption_key" {
   description = "N8N encryption key"
