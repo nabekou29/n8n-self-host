@@ -3,8 +3,9 @@ FROM n8nio/n8n:latest
 # Switch to root to install packages
 USER root
 
-# Install required tools
-RUN apk add --no-cache bash curl
+# Install required tools including Google Cloud SDK
+RUN apk add --no-cache bash curl python3 py3-pip && \
+    pip3 install --break-system-packages --no-cache-dir gsutil
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /docker-entrypoint.sh

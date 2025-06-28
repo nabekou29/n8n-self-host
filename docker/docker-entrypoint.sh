@@ -48,7 +48,9 @@ trap 'backup_database; exit 0' SIGTERM SIGINT
         sleep 300
         if [ -f "${DB_PATH}" ]; then
             echo "[$(date)] Performing periodic backup..."
-            gsutil -q cp "${DB_PATH}" "gs://${BUCKET_NAME}/periodic/database-latest.sqlite" 2>/dev/null || echo "[$(date)] Periodic backup failed"
+            if ! gsutil cp "${DB_PATH}" "gs://${BUCKET_NAME}/periodic/database-latest.sqlite" 2>&1; then
+                echo "[$(date)] Periodic backup failed with error above"
+            fi
         fi
     done
 ) &
