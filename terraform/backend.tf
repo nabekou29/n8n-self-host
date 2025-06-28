@@ -25,11 +25,3 @@ resource "google_storage_bucket" "terraform_state" {
     prevent_destroy = true
   }
 }
-
-# バケットが作成された後、以下をversions.tfに追加してください：
-# terraform {
-#   backend "gcs" {
-#     bucket = "nabekou29-terraform-state"
-#     prefix = "n8n"
-#   }
-# }
