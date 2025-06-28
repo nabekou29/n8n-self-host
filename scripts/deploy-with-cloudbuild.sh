@@ -5,6 +5,10 @@ set -euo pipefail
 
 echo "Deploying N8N with Cloud Build..."
 
+# Navigate to terraform directory to get outputs
+TERRAFORM_DIR="$(dirname "$0")/../terraform"
+cd "$TERRAFORM_DIR"
+
 # Get values from Terraform
 PROJECT_ID=$(terraform output -raw project_id)
 REGION=$(terraform output -raw region)
