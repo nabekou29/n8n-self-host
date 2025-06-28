@@ -128,10 +128,10 @@ resource "google_cloud_run_v2_service" "n8n" {
     }
 
     timeout                          = "300s"
-    max_instance_request_concurrency = 1
+    max_instance_request_concurrency = 10
 
     containers {
-      image = "${var.region}-docker.pkg.dev/${var.project_id}/n8n/n8n:latest"
+      image = "n8nio/n8n:latest"
 
       resources {
         limits = {
@@ -140,6 +140,11 @@ resource "google_cloud_run_v2_service" "n8n" {
         }
 
         cpu_idle = true
+      }
+
+      volume_mounts {
+        name       = "n8n-data"
+        mount_path = "/home/node/.n8n"
       }
 
       env {
@@ -152,10 +157,6 @@ resource "google_cloud_run_v2_service" "n8n" {
         value = "/home/node/.n8n/database.sqlite"
       }
 
-      env {
-        name  = "GCS_BUCKET_NAME"
-        value = google_storage_bucket.n8n_data.name
-      }
 
       env {
         name  = "N8N_ENCRYPTION_KEY"
@@ -237,6 +238,11 @@ resource "google_cloud_run_v2_service" "n8n" {
         value = "--max-old-space-size=960"
       }
 
+      env {
+        name  = "N8N_PROXY_HOPS"
+        value = "1"
+      }
+
       ports {
         container_port = 5678
         name           = "http1"
@@ -245,7 +251,8 @@ resource "google_cloud_run_v2_service" "n8n" {
 
       startup_probe {
         http_get {
-          path = "/"
+          path = "/healthz"
+          port = 5678
         }
         initial_delay_seconds = 10
         timeout_seconds       = 5
@@ -255,12 +262,21 @@ resource "google_cloud_run_v2_service" "n8n" {
 
       liveness_probe {
         http_get {
-          path = "/"
+          path = "/healthz"
+          port = 5678
         }
         initial_delay_seconds = 60
         timeout_seconds       = 5
         period_seconds        = 30
         failure_threshold     = 3
+      }
+    }
+
+    volumes {
+      name = "n8n-data"
+      gcs {
+        bucket    = google_storage_bucket.n8n_data.name
+        read_only = false
       }
     }
   }
