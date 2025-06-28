@@ -37,9 +37,6 @@ cd terraform
 # Get service URL
 terraform output service_url
 
-# Get credentials
-terraform output -json n8n_credentials
-
 # Get encryption key (store securely)
 terraform output -raw encryption_key
 ```

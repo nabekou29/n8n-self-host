@@ -76,9 +76,6 @@ cd terraform
 # サービスURL
 terraform output service_url
 
-# 認証情報（JSONフォーマット）
-terraform output -json n8n_credentials
-
 # 暗号化キー（必ず安全に保管）
 terraform output -raw encryption_key
 ```
@@ -86,9 +83,9 @@ terraform output -raw encryption_key
 ## 動作確認
 
 1. 取得したURLにアクセス
-2. Basic認証でログイン
+2. 初回アクセス時にオーナーアカウントを作成
 3. 簡単なワークフローを作成して保存
-4. Cloud Runのログでバックアップ処理を確認：
+4. Cloud Runのログを確認：
 
 ```bash
 gcloud run services logs read n8n --region=us-central1 --limit=50
