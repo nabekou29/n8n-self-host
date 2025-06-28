@@ -1,6 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
+# Manual backup script for n8n SQLite database
+# Note: With the new architecture, automatic backups occur:
+# - On container shutdown (via SIGTERM trap)
+# - Every 5 minutes (periodic backup)
+# This script can be used for additional manual backups
+
 # Navigate to terraform directory to get outputs
 TERRAFORM_DIR="$(dirname "$0")/../terraform"
 cd "$TERRAFORM_DIR"
