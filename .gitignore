@@ -26,6 +26,8 @@ Thumbs.db
 # Credentials
 n8n-credentials.txt
 credentials.json
+terraform/n8n-credentials.txt
+terraform/terraform.tfvars
 
 # Temporary files
 *.tmp

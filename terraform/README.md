@@ -10,6 +10,8 @@
 
 ## デプロイ手順
 
+### 初回セットアップ
+
 1. Terraform初期化
 ```bash
 terraform init
@@ -21,18 +23,32 @@ cp terraform.tfvars.example terraform.tfvars
 # 必要に応じて編集
 ```
 
-3. デプロイプランの確認
-```bash
-terraform plan
-```
-
-4. デプロイ実行
+3. インフラストラクチャの作成
 ```bash
 terraform apply
 ```
 
-5. Cloud Storageボリュームマウントの設定
+### デプロイ方法
+
+#### 方法1: Cloud Buildを使用（推奨）
+
 ```bash
+# Cloud Build経由でデプロイ（ボリュームマウント含む）
+./deploy-with-cloudbuild.sh
+```
+
+このスクリプトは以下を自動的に実行します：
+- N8Nの最新イメージをデプロイ
+- Cloud Storageボリュームをマウント
+- 全ての環境変数を設定
+
+#### 方法2: 手動デプロイ
+
+```bash
+# 1. Terraformでリソースを作成/更新
+terraform apply
+
+# 2. ボリュームマウントを設定
 ./post-deploy.sh
 ```
 
@@ -49,14 +65,37 @@ terraform output -json n8n_credentials
 terraform output -raw encryption_key
 ```
 
-## 注意事項
+## 重要な注意事項
 
-- Cloud Storageボリュームマウントは現在Terraformで直接設定できないため、post-deploy.shスクリプトで設定します
-- SQLiteとCloud Storageの組み合わせは本番環境には推奨されません
+- **Terraformの制限**: Cloud Run Gen2のボリュームマウントはTerraformでサポートされていません
+- **`terraform apply`の影響**: 実行するとCloud Runサービスのボリュームマウント設定が削除されます
+- **新しいリビジョン作成時**: 必ずCloud Build経由でデプロイするか、`post-deploy.sh`を実行してください
+- **SQLiteの制限**: 同時実行数は1に制限されています
+- **本番環境**: SQLiteとCloud Storageの組み合わせは推奨されません
 - 詳細な制限事項は../guide.mdを参照してください
+
+## バックアップ
+
+SQLiteデータベースのバックアップスクリプトが用意されています：
+
+```bash
+# バックアップの実行
+../scripts/backup-n8n.sh
+```
 
 ## クリーンアップ
 
 ```bash
 terraform destroy
 ```
+
+## ファイル一覧
+
+- `main.tf` - メインのリソース定義
+- `variables.tf` - 変数定義
+- `outputs.tf` - 出力値定義
+- `versions.tf` - プロバイダーとバックエンド設定
+- `backend.tf` - Terraform state用のGCSバケット定義
+- `cloudbuild.yaml` - Cloud Build設定
+- `deploy-with-cloudbuild.sh` - Cloud Buildデプロイスクリプト
+- `post-deploy.sh` - ボリュームマウント設定スクリプト
