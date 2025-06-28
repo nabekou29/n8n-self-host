@@ -1,0 +1,11 @@
+# Project settings
+project_id = "nabekou29"
+region     = "us-central1"
+
+# Service settings
+service_name = "n8n"
+
+# Authentication (optional - will be auto-generated if not specified)
+# n8n_basic_auth_user     = "admin"
+# n8n_basic_auth_password = "your-secure-password"
+# n8n_encryption_key      = "your-32-char-hex-key"
