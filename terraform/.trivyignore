@@ -1,0 +1,4 @@
+# Google Cloud Storage CMEK設定の無視
+# 個人利用のN8Nでは過剰なセキュリティ要件のため
+# また、KMS使用による追加コストを避けるため
+AVD-GCP-0066

@@ -1,0 +1,59 @@
+formatter: "markdown"
+version: ""
+
+recursive:
+  enabled: false
+
+sections:
+  show:
+    - header
+    - requirements
+    - providers
+    - inputs
+    - outputs
+    - resources
+
+content: |-
+  {{ .Header }}
+
+  ## Requirements
+
+  {{ .Requirements }}
+
+  ## Providers
+
+  {{ .Providers }}
+
+  ## Inputs
+
+  {{ .Inputs }}
+
+  ## Outputs
+
+  {{ .Outputs }}
+
+  ## Resources
+
+  {{ .Resources }}
+
+output:
+  file: "TERRAFORM_DOCS.md"
+  mode: inject
+  template: |-
+    <!-- BEGIN_TF_DOCS -->
+    {{ .Content }}
+    <!-- END_TF_DOCS -->
+
+sort:
+  enabled: true
+  by: required
+
+settings:
+  anchor: true
+  color: true
+  default: true
+  escape: true
+  indent: 2
+  required: true
+  sensitive: true
+  type: true
