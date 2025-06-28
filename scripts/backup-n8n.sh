@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # Navigate to terraform directory to get outputs
 TERRAFORM_DIR="$(dirname "$0")/../terraform"
@@ -17,24 +17,34 @@ echo "Source bucket: ${BUCKET_NAME}"
 echo "Backup bucket: ${BACKUP_BUCKET}"
 
 # Create backup of SQLite database
-gsutil cp gs://${BUCKET_NAME}/database.sqlite \
-  gs://${BACKUP_BUCKET}/backups/database-${DATE}.sqlite
+echo "Creating backup..."
+gsutil -q cp gs://${BUCKET_NAME}/database.sqlite \
+  gs://${BACKUP_BUCKET}/backups/database-${DATE}.sqlite || {
+    echo "Failed to create backup"
+    exit 1
+}
 
 # Verify backup
 gsutil ls -l gs://${BACKUP_BUCKET}/backups/database-${DATE}.sqlite
 
-# Clean up old backups (older than 30 days)
-echo "Cleaning up old backups..."
-gsutil ls gs://${BACKUP_BUCKET}/backups/ | \
-  while read backup; do
-    backup_date=$(echo $backup | grep -oP '\d{8}' | head -1)
-    if [ ! -z "$backup_date" ]; then
-      days_old=$(( ($(date +%s) - $(date -d $backup_date +%s 2>/dev/null || echo 0)) / 86400 ))
-      if [ $days_old -gt 30 ]; then
-        echo "Deleting old backup: $backup"
-        gsutil rm $backup
-      fi
-    fi
-  done
+# List successful backups
+echo "Recent backups:"
+gsutil ls -l gs://${BACKUP_BUCKET}/backups/ | tail -5
+
+# Note: Lifecycle rules in Terraform will handle cleanup automatically
+
+# Optional: Run VACUUM on local copy to check database integrity
+echo "Downloading database for integrity check..."
+TEMP_DB="/tmp/n8n-db-check-${DATE}.sqlite"
+gsutil cp gs://${BACKUP_BUCKET}/backups/database-${DATE}.sqlite "${TEMP_DB}"
+
+if sqlite3 "${TEMP_DB}" "PRAGMA integrity_check;" | grep -q "ok"; then
+  echo "✓ Database integrity check passed"
+else
+  echo "✗ Database integrity check failed!"
+  exit 1
+fi
+
+rm -f "${TEMP_DB}"
 
 echo "Backup completed successfully!"
