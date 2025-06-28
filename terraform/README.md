@@ -34,7 +34,7 @@ terraform apply
 
 ```bash
 # Cloud Build経由でデプロイ（ボリュームマウント含む）
-./deploy-with-cloudbuild.sh
+../scripts/deploy-with-cloudbuild.sh
 ```
 
 このスクリプトは以下を自動的に実行します：
@@ -45,11 +45,11 @@ terraform apply
 #### 方法2: 手動デプロイ
 
 ```bash
-# 1. Terraformでリソースを作成/更新
+# Terraformでリソースを作成/更新
 terraform apply
 
-# 2. ボリュームマウントを設定
-./post-deploy.sh
+# 注意: この方法ではボリュームマウントが設定されません
+# Cloud Buildを使用してください
 ```
 
 ## アクセス情報の取得
@@ -69,7 +69,7 @@ terraform output -raw encryption_key
 
 - **Terraformの制限**: Cloud Run Gen2のボリュームマウントはTerraformでサポートされていません
 - **`terraform apply`の影響**: 実行するとCloud Runサービスのボリュームマウント設定が削除されます
-- **新しいリビジョン作成時**: 必ずCloud Build経由でデプロイするか、`post-deploy.sh`を実行してください
+- **新しいリビジョン作成時**: 必ずCloud Build経由でデプロイしてください
 - **SQLiteの制限**: 同時実行数は1に制限されています
 - **本番環境**: SQLiteとCloud Storageの組み合わせは推奨されません
 - 詳細な制限事項は../guide.mdを参照してください
@@ -97,5 +97,4 @@ terraform destroy
 - `versions.tf` - プロバイダーとバックエンド設定
 - `backend.tf` - Terraform state用のGCSバケット定義
 - `cloudbuild.yaml` - Cloud Build設定
-- `deploy-with-cloudbuild.sh` - Cloud Buildデプロイスクリプト
-- `post-deploy.sh` - ボリュームマウント設定スクリプト
+- `../scripts/deploy-with-cloudbuild.sh` - Cloud Buildデプロイスクリプト

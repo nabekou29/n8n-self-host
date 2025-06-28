@@ -49,11 +49,12 @@ terraform init
 # プランの確認
 terraform plan
 
-# デプロイ実行
+# インフラの作成
 terraform apply
 
-# Cloud Storageボリュームマウントの設定
-./post-deploy.sh
+# N8Nのデプロイ（Cloud Build経由）
+cd ..
+./scripts/deploy-with-cloudbuild.sh
 ```
 
 ### 4. アクセス情報の取得
