@@ -4,7 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository contains infrastructure code for self-hosting n8n workflow automation on Google Cloud Run using SQLite database with Cloud Storage for persistence. The setup uses Terraform for infrastructure management and Cloud Build for deployment.
+This repository contains infrastructure code for self-hosting n8n workflow automation on Google Cloud Run using SQLite database with a custom Docker image that handles GCS synchronization. The setup uses Terraform for infrastructure management and Cloud Build for deployment.
+
+## Current Architecture
+
+```
+Cloud Run (n8n) ←→ Local SQLite ←→ GCS Backup
+```
+
+- **No GCS FUSE**: Avoids 429 rate limit errors
+- **Local SQLite**: Runs in container memory for performance
+- **GCS Sync**: Backup/restore on startup/shutdown + periodic backups
 
 ## Important Commands
 
@@ -17,13 +27,15 @@ terraform init
 # 2. Create infrastructure
 terraform apply
 
-# 3. Deploy n8n with Cloud Build (includes volume mount setup)
+# 3. Deploy n8n with Cloud Build
 cd ..
-./scripts/deploy-with-cloudbuild.sh
+./scripts/deploy.sh
 ```
 
 ### Access Information
 ```bash
+cd terraform
+
 # Get service URL
 terraform output service_url
 
@@ -36,73 +48,122 @@ terraform output -raw encryption_key
 
 ### Backup Operations
 ```bash
-# Run backup (from project root)
+# Run manual backup (from project root)
 ./scripts/backup-n8n.sh
+
+# Check automatic backups
+gsutil ls gs://${PROJECT_ID}-n8n-data/periodic/
+gsutil ls gs://${PROJECT_ID}-n8n-data/backup/
 ```
 
 ### Updates and Redeployment
 ```bash
-# IMPORTANT: Always use Cloud Build for deployment
-./scripts/deploy-with-cloudbuild.sh
-
-# WARNING: Do NOT run 'terraform apply' after initial setup
-# It will remove volume mount configuration
+# Deploy updates via Cloud Build
+./scripts/deploy.sh
 ```
 
-## Architecture
+## Architecture Details
 
 The project consists of:
 
-1. **Cloud Run Service**: Hosts n8n application with strict concurrency=1 (SQLite limitation)
-2. **Cloud Storage**: Two buckets - one for database persistence, one for backups
-3. **Volume Mount**: Cloud Storage FUSE mounts the database bucket to /home/node/.n8n
-4. **Terraform**: Manages infrastructure but cannot handle Gen2 volume mounts
-5. **Cloud Build**: Handles deployment including volume mount configuration
+1. **Cloud Run Service**: Hosts n8n application with concurrency=10
+2. **Cloud Storage**: Two buckets - one for database/backups, one for state
+3. **Custom Docker Image**: Handles database sync with GCS
+4. **Terraform**: Manages all infrastructure including Artifact Registry
+5. **Cloud Build**: Builds and deploys the custom Docker image
 
-## Critical Limitations
+## Custom Docker Implementation
 
-1. **SQLite + Cloud Storage Issues**:
-   - No file locking support
-   - 60-100x slower performance than local SQLite
-   - Risk of data corruption
-   - NOT suitable for production use
+### Entrypoint Script Flow
+1. **Startup**: Download database.sqlite from GCS (if exists)
+2. **Runtime**: SQLite runs locally in container
+3. **Periodic**: Backup to GCS every 5 minutes
+4. **Shutdown**: Upload database.sqlite to GCS on SIGTERM
 
-2. **Terraform Limitations**:
-   - Cannot manage Cloud Run Gen2 volume mounts
-   - Running `terraform apply` after initial setup removes volume configuration
-   - Always use Cloud Build for deployments
-
-3. **Concurrency Restrictions**:
-   - Max concurrency set to 1 to prevent database corruption
-   - Only one instance can run at a time
+### Current Issues
+- Custom entrypoint may not be executing properly
+- Need to investigate n8n's default entrypoint integration
 
 ## Directory Structure
 
 ```
 .
-├── README.md               # Main documentation
-├── guide.md               # Detailed implementation guide
+├── README.md              # Main documentation
+├── guide.md              # Detailed implementation guide
+├── CLAUDE.md             # This file
+├── cloudbuild.yaml       # Cloud Build configuration
+├── docker/
+│   ├── Dockerfile        # Custom n8n image
+│   └── docker-entrypoint.sh  # Sync script
 ├── scripts/
-│   ├── deploy-with-cloudbuild.sh  # Primary deployment script
-│   └── backup-n8n.sh             # Database backup script
+│   ├── deploy.sh         # Deployment script
+│   └── backup-n8n.sh     # Manual backup script
 └── terraform/
-    ├── main.tf            # Resource definitions
-    ├── variables.tf       # Variable definitions
-    ├── outputs.tf         # Output values
-    ├── backend.tf         # State backend config
-    └── cloudbuild.yaml    # Cloud Build configuration
+    ├── main.tf           # Resource definitions
+    ├── variables.tf      # Variable definitions
+    ├── outputs.tf        # Output values
+    └── backend.tf        # State backend config
 ```
 
 ## Development Workflow
 
-1. **Infrastructure Changes**: Modify Terraform files and run `terraform apply`
-2. **Configuration Updates**: Use environment variables in cloudbuild.yaml
-3. **Deployment**: Always use `./scripts/deploy-with-cloudbuild.sh`
-4. **Testing**: Access the service URL with provided credentials
+1. **Infrastructure Changes**: 
+   - Modify Terraform files
+   - Run `terraform plan` then `terraform apply`
 
-## Common Issues
+2. **Docker Image Changes**:
+   - Modify files in `docker/` directory
+   - Deploy via `./scripts/deploy.sh`
 
-1. **Volume Mount Missing**: Always deploy via Cloud Build, not Terraform
-2. **Database Locked**: Ensure concurrency=1 and max-instances=1
-3. **Performance Issues**: This is expected with Cloud Storage + SQLite
-4. **Backup Failures**: Check Cloud Storage permissions and bucket existence
+3. **Configuration Updates**: 
+   - Update environment variables in `terraform/main.tf`
+   - Run `terraform apply` then `./scripts/deploy.sh`
+
+## Known Issues and Limitations
+
+1. **429 Errors**: 
+   - GCS FUSE removed but seeing some 429s
+   - May be Cloud Run service limits
+
+2. **Data Persistence**:
+   - Max 5 minute data loss on crash
+   - Startup time increases with database size
+
+3. **Scalability**:
+   - Limited to single instance due to SQLite
+   - Consider PostgreSQL for production
+
+## Troubleshooting
+
+### Check if custom entrypoint is running
+```bash
+gcloud run services logs read n8n --region=us-central1 --limit=50 | grep -E "Starting database|Backing up"
+```
+
+### Verify GCS bucket contents
+```bash
+gsutil ls -la gs://${PROJECT_ID}-n8n-data/
+```
+
+### Force container restart
+```bash
+gcloud run services update n8n --region=us-central1 --update-env-vars=FORCE_RESTART=$(date +%s)
+```
+
+## Future Improvements
+
+1. **Fix custom entrypoint execution**
+2. **Migrate to Cloud SQL for production**
+3. **Add monitoring and alerting**
+4. **Implement proper health checks**
+
+## Cost Optimization
+
+Current setup costs approximately:
+- Cloud Run: $0-50/month (depends on usage)
+- Cloud Storage: <$1/month
+- Total: **<$51/month**
+
+For production, add Cloud SQL:
+- db-f1-micro: +$10/month
+- db-g1-small: +$50/month (recommended)

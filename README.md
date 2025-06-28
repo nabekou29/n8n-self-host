@@ -2,22 +2,32 @@
 
 Cloud RunでN8Nをセルフホストするためのインフラストラクチャコード
 
-## ⚠️ 重要な警告
+## アーキテクチャ
 
-このセットアップは**SQLiteとCloud Storage**を使用しており、以下の制限があります：
-- ファイルロッキングが機能しない
-- パフォーマンスが大幅に低下する（60-100倍遅い）
-- データ破損のリスクがある
-- **本番環境での使用は推奨されません**
+このソリューションは、コスト最適化のためにSQLite + ローカルストレージ方式を採用しています：
 
-詳細は[guide.md](./guide.md)を参照してください。
+- **起動時**: GCSからSQLiteデータベースを復元
+- **実行中**: ローカルファイルシステムでSQLiteを使用（高速）
+- **終了時**: SQLiteデータベースをGCSにバックアップ
+- **定期バックアップ**: 5分ごとに自動バックアップ
+
+### メリット
+- 月額コストがほぼゼロ（GCSストレージのみ）
+- GCS FUSEの429エラーを回避
+- SQLiteの高速性を維持
+
+### デメリット
+- 予期しないクラッシュ時のデータロスリスク（最大5分）
+- 起動時間がデータベースサイズに依存
+- 大規模なデータベースには不向き
 
 ## 必要な環境
 
 - Google Cloud アカウント
 - Terraform >= 1.0
 - gcloud CLI
-- 適切な権限
+- Docker
+- 適切な権限（Project Editor以上）
 
 ## デプロイ手順
 
@@ -35,10 +45,11 @@ cd n8n-self-host
 gcloud auth login
 
 # プロジェクトの設定
-gcloud config set project nabekou29
+export PROJECT_ID="your-project-id"
+gcloud config set project ${PROJECT_ID}
 ```
 
-### 3. Terraformでのデプロイ
+### 3. Terraformでのインフラ構築
 
 ```bash
 cd terraform
@@ -51,15 +62,23 @@ terraform plan
 
 # インフラの作成
 terraform apply
-
-# N8Nのデプロイ（Cloud Build経由）
-cd ..
-./scripts/deploy-with-cloudbuild.sh
 ```
 
-### 4. アクセス情報の取得
+### 4. カスタムDockerイメージのデプロイ
 
 ```bash
+# プロジェクトルートに戻る
+cd ..
+
+# Cloud Build経由でデプロイ
+./scripts/deploy.sh
+```
+
+### 5. アクセス情報の取得
+
+```bash
+cd terraform
+
 # サービスURL
 terraform output service_url
 
@@ -70,25 +89,102 @@ terraform output -json n8n_credentials
 terraform output -raw encryption_key
 ```
 
-## バックアップ
+## 動作確認
 
-定期的なバックアップを実行：
+1. 取得したURLにアクセス
+2. Basic認証でログイン
+3. 簡単なワークフローを作成して保存
+4. Cloud Runのログでバックアップ処理を確認：
 
+```bash
+gcloud run services logs read n8n --region=us-central1 --limit=50
+```
+
+## データ管理
+
+### 現在のデータベース
+```bash
+gsutil ls -l gs://${PROJECT_ID}-n8n-data/
+```
+
+### 定期バックアップ
+```bash
+gsutil ls -l gs://${PROJECT_ID}-n8n-data/periodic/
+```
+
+### タイムスタンプ付きバックアップ
+```bash
+gsutil ls -l gs://${PROJECT_ID}-n8n-data/backup/
+```
+
+### 手動バックアップ
 ```bash
 ./scripts/backup-n8n.sh
 ```
 
 ## トラブルシューティング
 
-### データベースロックエラー
+### 429エラーが発生する場合
 
-同時実行が原因です。Cloud Runの同時実行数が1に設定されていることを確認してください。
+Cloud Runサービスへの429エラーの場合：
+```bash
+# 並行処理数を増やす
+gcloud run services update n8n --region=us-central1 --concurrency=10
+```
 
-### パフォーマンスが遅い
+### データベースが復元されない場合
+```bash
+# GCSバケットの内容を確認
+gsutil ls -la gs://${PROJECT_ID}-n8n-data/
+```
 
-これはCloud Storage + SQLiteの組み合わせによる既知の問題です。改善方法：
-- Cloud SQLへの移行を検討
-- Compute Engine + SQLiteの使用を検討
+### ログの確認
+```bash
+# Cloud Runのログを確認
+gcloud run services logs read n8n --region=us-central1 --limit=100
+```
+
+## メンテナンス
+
+### イメージの更新
+```bash
+# n8nの新バージョンに更新
+./scripts/deploy.sh
+```
+
+### データベースの最適化
+```bash
+# データベースをダウンロードして最適化
+gsutil cp gs://${PROJECT_ID}-n8n-data/database.sqlite /tmp/
+sqlite3 /tmp/database.sqlite "VACUUM;"
+gsutil cp /tmp/database.sqlite gs://${PROJECT_ID}-n8n-data/
+```
+
+## 将来の移行パス
+
+データ量が増えてきた場合は、Cloud SQL（PostgreSQL）への移行を検討してください：
+
+1. n8nのエクスポート機能でワークフローをバックアップ
+2. Cloud SQL インスタンスを作成
+3. 環境変数を PostgreSQL 用に変更
+4. ワークフローをインポート
+
+## プロジェクト構成
+
+```
+.
+├── docker/                 # カスタムDockerイメージ
+│   ├── Dockerfile
+│   └── docker-entrypoint.sh
+├── scripts/               # デプロイ・管理スクリプト
+│   ├── deploy.sh
+│   └── backup-n8n.sh
+├── terraform/             # インフラストラクチャ定義
+│   ├── main.tf
+│   ├── variables.tf
+│   └── outputs.tf
+└── cloudbuild.yaml        # Cloud Build設定
+```
 
 ## クリーンアップ
 
