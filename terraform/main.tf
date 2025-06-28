@@ -87,13 +87,13 @@ resource "google_service_account" "n8n_runner" {
 # IAM bindings for service account
 resource "google_storage_bucket_iam_member" "n8n_runner_storage" {
   bucket = google_storage_bucket.n8n_data.name
-  role   = "roles/storage.admin"
+  role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${google_service_account.n8n_runner.email}"
 }
 
 resource "google_storage_bucket_iam_member" "n8n_runner_backups" {
   bucket = google_storage_bucket.n8n_backups.name
-  role   = "roles/storage.admin"
+  role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${google_service_account.n8n_runner.email}"
 }
 
@@ -206,6 +206,26 @@ resource "google_cloud_run_v2_service" "n8n" {
       }
 
       # Volume mount will be configured via gcloud command after deployment
+
+      startup_probe {
+        http_get {
+          path = "/healthz"
+        }
+        initial_delay_seconds = 0
+        timeout_seconds       = 1
+        period_seconds        = 3
+        failure_threshold     = 3
+      }
+
+      liveness_probe {
+        http_get {
+          path = "/healthz"
+        }
+        initial_delay_seconds = 30
+        timeout_seconds       = 5
+        period_seconds        = 30
+        failure_threshold     = 3
+      }
     }
   }
 
