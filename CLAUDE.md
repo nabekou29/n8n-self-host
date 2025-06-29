@@ -2,171 +2,79 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## プロジェクト概要
 
-This repository contains infrastructure code for self-hosting n8n workflow automation on Google Cloud Run using SQLite database with a custom Docker image that handles GCS synchronization. The setup uses Terraform for infrastructure management and Cloud Build for deployment.
+n8nワークフロー自動化ツールをGoogle Cloud Runでセルフホストするためのインフラストラクチャコード。Terraformを使用してGCPリソースを管理。
 
-## Current Architecture
+## アーキテクチャ
 
-```
-Cloud Run (n8n) ←→ SQLite on GCS FUSE Volume
-```
+- **Cloud Run**: n8nアプリケーションのホスティング
+- **SQLite on GCS FUSE**: Cloud StorageをFUSEマウントしたボリューム上のデータベース
+- **Cloud Storage**: データとバックアップの永続化
 
-- **GCS FUSE Volume**: Cloud Run's built-in volume mount for persistence
-- **SQLite Database**: Stored directly on GCS through FUSE mount
-- **Simple Setup**: No custom Docker image needed
+## 重要なコマンド
 
-## Important Commands
-
-### Initial Setup and Deployment
-
-```bash
-# 1. Initialize Terraform (from terraform directory)
-cd terraform
-terraform init
-
-# 2. Create infrastructure and deploy n8n
-terraform apply
-```
-
-### Access Information
-
+### デプロイメント
 ```bash
 cd terraform
-
-# Get service URL
-terraform output service_url
-
-# Get encryption key (store securely)
-terraform output -raw encryption_key
+terraform init    # 初回またはプロバイダー更新時
+terraform plan    # 変更内容の確認
+terraform apply   # リソースのデプロイ
 ```
 
-### Backup Operations
-
+### デプロイ後の情報取得
 ```bash
-# Manual backup of database
-gsutil cp gs://${PROJECT_ID}-n8n-data/database.sqlite ./backup-$(date +%Y%m%d-%H%M%S).sqlite
-
-# Check database file
-gsutil ls -l gs://${PROJECT_ID}-n8n-data/
+terraform output service_url          # n8nのアクセスURL
+terraform output -raw encryption_key  # 暗号化キー（要保管）
+terraform output n8n_url             # カスタムドメインまたはデフォルトURL
+terraform output dns_records         # カスタムドメイン設定時のDNSレコード
 ```
 
-### Updates and Redeployment
-
+### リソース管理
 ```bash
-# Update via Terraform
-cd terraform
-terraform apply
+terraform state list    # 管理されているリソース一覧
+terraform destroy      # リソースの削除（注意：データも削除される）
 ```
 
-## Architecture Details
+## プロジェクト構造
 
-The project consists of:
+- **terraform/**: インフラストラクチャ定義
+  - `main.tf`: Cloud Run、Storage、IAM等のリソース定義
+  - `variables.tf`: 設定可能な変数（project_id、region、custom_domain等）
+  - `outputs.tf`: デプロイ後に取得可能な情報
+  - `backend.tf`: Terraformステート管理（GCSバケット）
+  - `versions.tf`: プロバイダーバージョン指定
 
-1. **Cloud Run Service**: Hosts n8n application with concurrency=10
-2. **Cloud Storage**: Two buckets - one for database, one for backups
-3. **Official n8n Image**: Uses n8nio/n8n:latest
-4. **Terraform**: Manages all infrastructure
-5. **GCS FUSE**: Provides persistent volume for SQLite
+## 設定のカスタマイズ
 
-## Volume Mount Configuration
+### 必須設定
+- `project_id`: GCPプロジェクトID（デフォルト: "nabekou29"）
+- `region`: デプロイリージョン（デフォルト: "us-central1"）
 
-- SQLite database is stored at `/home/node/.n8n/database.sqlite`
-- GCS bucket is mounted as a volume at `/home/node/.n8n`
-- Data persists automatically through Cloud Run's GCS FUSE integration
+### オプション設定
+- `custom_domain`: カスタムドメイン（例: "n8n.example.com"）
+- `n8n_encryption_key`: 既存の暗号化キー（未指定時は自動生成）
+- `service_name`: Cloud Runサービス名（デフォルト: "n8n"）
 
-## Directory Structure
+## セキュリティ考慮事項
 
-```
-.
-├── README.md              # Main documentation
-├── CLAUDE.md             # This file
-└── terraform/
-    ├── main.tf           # Resource definitions
-    ├── variables.tf      # Variable definitions
-    ├── outputs.tf        # Output values
-    └── backend.tf        # State backend config
-```
+1. **暗号化キー**: `terraform output -raw encryption_key`で取得した値は安全に保管すること
+2. **パブリックアクセス**: デフォルトでallUsersからのアクセスが許可されている（n8n内蔵認証を使用）
+3. **サービスアカウント**: 最小権限の原則に基づいて設定済み
 
-## Development Workflow
+## トラブルシューティング
 
-1. **Infrastructure Changes**:
-
-   - Modify Terraform files
-   - Run `terraform plan` then `terraform apply`
-
-2. **Configuration Updates**:
-   - Update environment variables in `terraform/main.tf`
-   - Run `terraform apply`
-
-## Code Quality Checks
-
-Always run these checks before applying changes:
-
+### Terraformステートの競合
 ```bash
-# Format Terraform files
-cd terraform && terraform fmt
-
-# Validate Terraform configuration
-cd terraform && terraform validate
-
-# Security scan with Trivy
-cd terraform && trivy config .
+terraform refresh  # ステートと実際のリソースを同期
 ```
 
-## Known Issues and Limitations
+### n8nへのアクセス問題
+1. Cloud Runのログを確認: GCPコンソール → Cloud Run → ログ
+2. ヘルスチェックエンドポイント: `/healthz`
+3. 起動に時間がかかる場合があるため、数分待つ
 
-1. **429 Errors**:
-
-   - May occur due to GCS FUSE rate limits
-   - Consider increasing Cloud Run concurrency if needed
-
-2. **Data Persistence**:
-
-   - Data persists automatically through GCS FUSE
-   - No data loss on container restart
-
-3. **Scalability**:
-   - Limited to single instance due to SQLite
-   - Consider PostgreSQL for production
-
-## Troubleshooting
-
-### Check service logs
-
-```bash
-gcloud run services logs read n8n --region=us-central1 --limit=50
-```
-
-### Verify GCS bucket contents
-
-```bash
-gsutil ls -la gs://${PROJECT_ID}-n8n-data/
-```
-
-### Force container restart
-
-```bash
-gcloud run services update n8n --region=us-central1 --update-env-vars=FORCE_RESTART=$(date +%s)
-```
-
-## Future Improvements
-
-1. **Migrate to Cloud SQL for production scale**
-2. **Add monitoring and alerting**
-3. **Implement automated backups to separate bucket**
-4. **Add custom domain configuration**
-
-## Cost Optimization
-
-Current setup costs approximately:
-
-- Cloud Run: $0-50/month (depends on usage)
-- Cloud Storage: <$1/month
-- Total: **<$51/month**
-
-For production, add Cloud SQL:
-
-- db-f1-micro: +$10/month
-- db-g1-small: +$50/month (recommended)
-
+### カスタムドメイン設定
+1. `terraform output dns_records`でCNAMEレコード情報を取得
+2. DNSプロバイダーでCNAMEレコードを設定（ghs.googlehosted.com）
+3. SSL証明書の発行には最大24時間かかる場合がある

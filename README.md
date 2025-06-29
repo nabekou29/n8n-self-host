@@ -1,168 +1,47 @@
 # n8n Self-Host on Google Cloud Run
 
-Cloud Runでn8nをセルフホストするためのインフラストラクチャコード
+## 目的
+
+n8nワークフロー自動化ツールを低コストでセルフホストする。
 
 ## アーキテクチャ
 
-このソリューションは、Cloud Run上で公式n8nイメージを使用し、SQLiteデータベースをGCS FUSEボリュームで永続化しています：
-
-- **データベース**: SQLiteをGCS上に保存
-- **永続化**: Cloud RunのGCS FUSEボリュームマウント機能を使用
-- **コスト**: ほぼゼロ（GCSストレージのみ）
-
-### メリット
-
-- 月額コストがほぼゼロ（GCSストレージのみ）
-- 設定がシンプル
-- 自動的にデータが永続化される
-
-### デメリット
-
-- GCS FUSEのパフォーマンス制限
-- 大規模なデータベースには不向き
-- 429エラーが発生する可能性
-
-## 必要な環境
-
-- Google Cloud アカウント
-- Terraform >= 1.0
-- gcloud CLI
-- 適切な権限（Project Editor以上）
-
-## デプロイ手順
-
-### 1. リポジトリのクローン
-
-```bash
-git clone https://github.com/nabekou29/n8n-self-host.git
-cd n8n-self-host
+```
+┌─────────────┐     ┌──────────────┐     ┌─────────────────┐
+│  Cloud Run  │────▶│    SQLite    │────▶│  Cloud Storage  │
+│    (n8n)    │     │  (GCS FUSE)  │     │   (Persistent)  │
+└─────────────┘     └──────────────┘     └─────────────────┘
 ```
 
-### 2. GCPの準備
+- **Cloud Run**: n8nアプリケーションのホスティング（デフォルトURL or カスタムドメイン\*）
+- **SQLite**: GCS FUSEボリューム上のデータベース
+- **Cloud Storage**: データの永続化
 
-```bash
-# ログイン
-gcloud auth login
+\*カスタムドメインはCloud Runドメインマッピング（プレビュー機能）を使用
 
-# プロジェクトの設定
-export PROJECT_ID="your-project-id"
-gcloud config set project ${PROJECT_ID}
-```
-
-### 3. Terraformでのインフラ構築
-
-```bash
-cd terraform
-
-# 初期化
-terraform init
-
-# プランの確認
-terraform plan
-
-# インフラの作成
-terraform apply
-```
-
-### 4. サービスの確認
-
-Terraform applyが完了すると、n8nサービスが自動的にデプロイされます。
-
-### 5. アクセス情報の取得
-
-```bash
-cd terraform
-
-# サービスURL
-terraform output service_url
-
-# 暗号化キー（必ず安全に保管）
-terraform output -raw encryption_key
-```
-
-## 動作確認
-
-1. 取得したURLにアクセス
-2. 初回アクセス時にオーナーアカウントを作成
-3. 簡単なワークフローを作成して保存
-4. Cloud Runのログを確認：
-
-```bash
-gcloud run services logs read n8n --region=us-central1 --limit=50
-```
-
-## データ管理
-
-### 現在のデータベース
-
-```bash
-gsutil ls -l gs://${PROJECT_ID}-n8n-data/
-```
-
-### 定期バックアップ
-
-```bash
-gsutil ls -l gs://${PROJECT_ID}-n8n-data/periodic/
-```
-
-### タイムスタンプ付きバックアップ
-
-```bash
-gsutil ls -l gs://${PROJECT_ID}-n8n-data/backup/
-```
-
-### 手動バックアップ
-
-```bash
-# データベースファイルを直接コピー
-gsutil cp gs://${PROJECT_ID}-n8n-data/database.sqlite ./backup-$(date +%Y%m%d-%H%M%S).sqlite
-```
-
-## メンテナンス
-
-### イメージの更新
-
-```bash
-# Terraformでイメージを更新
-cd terraform
-terraform apply -var="n8n_image_tag=latest"
-```
-
-### データベースの最適化
-
-```bash
-# データベースをダウンロードして最適化
-gsutil cp gs://${PROJECT_ID}-n8n-data/database.sqlite /tmp/
-sqlite3 /tmp/database.sqlite "VACUUM;"
-gsutil cp /tmp/database.sqlite gs://${PROJECT_ID}-n8n-data/
-```
-
-## 将来の移行パス
-
-データ量が増えてきた場合は、Cloud SQL（PostgreSQL）への移行を検討してください：
-
-1. n8nのエクスポート機能でワークフローをバックアップ
-2. Cloud SQL インスタンスを作成
-3. 環境変数を PostgreSQL 用に変更
-4. ワークフローをインポート
-
-## プロジェクト構成
+## 構成
 
 ```
 .
-├── terraform/             # インフラストラクチャ定義
-│   ├── main.tf           # メインのリソース定義
-│   ├── variables.tf      # 変数定義
-│   ├── outputs.tf        # 出力定義
-│   └── backend.tf        # Terraformステート設定
-├── README.md             # このファイル
-└── CLAUDE.md             # Claude Code用ガイドライン
+├── terraform/
+│   ├── main.tf          # Cloud Run、GCSバケットの定義
+│   ├── variables.tf     # プロジェクトIDなどの変数
+│   ├── outputs.tf       # サービスURL、暗号化キーの出力
+│   └── backend.tf       # Terraformステートの管理
+└── README.md
 ```
 
-## クリーンアップ
+## デプロイ
 
 ```bash
 cd terraform
-terraform destroy
+terraform init
+terraform apply
 ```
 
+## アクセス情報
+
+```bash
+terraform output service_url          # n8nのURL
+terraform output -raw encryption_key  # 暗号化キー（要保管）
+```
