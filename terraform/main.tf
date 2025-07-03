@@ -4,6 +4,7 @@ resource "google_project_service" "required_apis" {
     "run.googleapis.com",
     "storage.googleapis.com",
     "iam.googleapis.com",
+    "cloudscheduler.googleapis.com",
   ])
 
   service            = each.value
@@ -282,4 +283,32 @@ resource "google_cloud_run_domain_mapping" "n8n_domain" {
 
   depends_on = [google_cloud_run_v2_service.n8n]
 }
+
+# Cloud Scheduler to warm up instances before schedule triggers
+resource "google_cloud_scheduler_job" "n8n_warmup" {
+  name             = "n8n-instance-warmup"
+  description      = "Warm up n8n instance before scheduled workflows"
+  schedule         = "59 * * * *"  # Every hour at 59 minutes
+  time_zone        = "Asia/Tokyo"
+  attempt_deadline = "30s"
+
+  retry_config {
+    retry_count = 0
+  }
+
+  http_target {
+    http_method = "GET"
+    uri         = "${google_cloud_run_v2_service.n8n.uri}/healthz"
+
+    headers = {
+      "User-Agent" = "Google-Cloud-Scheduler"
+    }
+  }
+
+  depends_on = [
+    google_cloud_run_v2_service.n8n,
+    google_project_service.required_apis
+  ]
+}
+
 
