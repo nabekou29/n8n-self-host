@@ -215,6 +215,11 @@ resource "google_cloud_run_v2_service" "n8n" {
         value = "1"
       }
 
+      env {
+        name  = "QUEUE_HEALTH_CHECK_ACTIVE"
+        value = "true"
+      }
+
       ports {
         container_port = 5678
         name           = "http1"
@@ -223,7 +228,7 @@ resource "google_cloud_run_v2_service" "n8n" {
 
       startup_probe {
         http_get {
-          path = "/healthz"
+          path = "/healthz/"
           port = 5678
         }
         initial_delay_seconds = 10
@@ -234,7 +239,7 @@ resource "google_cloud_run_v2_service" "n8n" {
 
       liveness_probe {
         http_get {
-          path = "/healthz"
+          path = "/healthz/"
           port = 5678
         }
         initial_delay_seconds = 60
@@ -288,7 +293,7 @@ resource "google_cloud_run_domain_mapping" "n8n_domain" {
 resource "google_cloud_scheduler_job" "n8n_warmup" {
   name             = "n8n-instance-warmup"
   description      = "Warm up n8n instance before scheduled workflows"
-  schedule         = "59 * * * *"  # Every hour at 59 minutes
+  schedule         = "59 * * * *" # Every hour at 59 minutes
   time_zone        = "Asia/Tokyo"
   attempt_deadline = "30s"
 
@@ -298,7 +303,7 @@ resource "google_cloud_scheduler_job" "n8n_warmup" {
 
   http_target {
     http_method = "GET"
-    uri         = "${google_cloud_run_v2_service.n8n.uri}/healthz"
+    uri         = "${google_cloud_run_v2_service.n8n.uri}/healthz/"
 
     headers = {
       "User-Agent" = "Google-Cloud-Scheduler"
