@@ -32,3 +32,7 @@ terraform/terraform.tfvars
 # Temporary files
 *.tmp
 *.temp
+
+.env
+
+node_modules/
