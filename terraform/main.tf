@@ -293,7 +293,7 @@ resource "google_cloud_run_domain_mapping" "n8n_domain" {
 resource "google_cloud_scheduler_job" "n8n_warmup" {
   name             = "n8n-instance-warmup"
   description      = "Warm up n8n instance before scheduled workflows"
-  schedule         = "59 * * * *" # Every hour at 59 minutes
+  schedule         = "55 * * * *" # Every hour at 55 minutes
   time_zone        = "Asia/Tokyo"
   attempt_deadline = "30s"
 
@@ -315,5 +315,3 @@ resource "google_cloud_scheduler_job" "n8n_warmup" {
     google_project_service.required_apis
   ]
 }
-
-
