@@ -1,0 +1,176 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://wttr.in/Tokyo?format=j1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0],
+      "id": "6da9ca72-a804-41f5-8359-63fbb5e2ae4f",
+      "name": "wttr.in"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "id": "bed1f1f5-49bd-4ece-8152-e8f7804ca6ff",
+      "name": "Trigger at 09:00"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\n\nconst englishWeather = $input.first().json.current_condition[0].weatherDesc[0].value;\n\n\n// 天気の英日変換辞書（絵文字付き）\nconst weatherTranslations = {\n  // 晴れ系\n  \"Clear\": { ja: \"快晴\", emoji: \"☀️\" },\n  \"Sunny\": { ja: \"晴れ\", emoji: \"☀️\" },\n  \"Partly cloudy\": { ja: \"晴れ時々曇り\", emoji: \"⛅\" },\n  \"Partly Cloudy\": { ja: \"晴れ時々曇り\", emoji: \"⛅\" },\n  \n  // 曇り系\n  \"Cloudy\": { ja: \"曇り\", emoji: \"☁️\" },\n  \"Overcast\": { ja: \"どんより曇り\", emoji: \"☁️\" },\n  \"Mist\": { ja: \"霧\", emoji: \"🌫️\" },\n  \"Fog\": { ja: \"濃霧\", emoji: \"🌫️\" },\n  \"Freezing fog\": { ja: \"凍結霧\", emoji: \"🌫️❄️\" },\n  \n  // 雨系\n  \"Patchy rain possible\": { ja: \"所により雨\", emoji: \"🌦️\" },\n  \"Patchy rain nearby\": { ja: \"所により雨\", emoji: \"🌦️\" },\n  \"Light rain\": { ja: \"小雨\", emoji: \"🌧️\" },\n  \"Moderate rain\": { ja: \"雨\", emoji: \"🌧️\" },\n  \"Heavy rain\": { ja: \"大雨\", emoji: \"🌧️\" },\n  \"Light rain shower\": { ja: \"にわか雨\", emoji: \"🌦️\" },\n  \"Moderate or heavy rain shower\": { ja: \"強いにわか雨\", emoji: \"🌧️\" },\n  \"Torrential rain shower\": { ja: \"豪雨\", emoji: \"🌧️\" },\n  \"Light drizzle\": { ja: \"霧雨\", emoji: \"🌦️\" },\n  \"Patchy light drizzle\": { ja: \"所により霧雨\", emoji: \"🌦️\" },\n  \"Heavy drizzle\": { ja: \"強い霧雨\", emoji: \"🌧️\" },\n  \"Freezing drizzle\": { ja: \"凍結霧雨\", emoji: \"🌧️❄️\" },\n  \n  // 雪系\n  \"Patchy snow possible\": { ja: \"所により雪\", emoji: \"🌨️\" },\n  \"Light snow\": { ja: \"小雪\", emoji: \"🌨️\" },\n  \"Moderate snow\": { ja: \"雪\", emoji: \"🌨️\" },\n  \"Heavy snow\": { ja: \"大雪\", emoji: \"❄️\" },\n  \"Blizzard\": { ja: \"吹雪\", emoji: \"🌨️💨\" },\n  \"Patchy light snow\": { ja: \"所により小雪\", emoji: \"🌨️\" },\n  \"Light snow showers\": { ja: \"にわか雪\", emoji: \"🌨️\" },\n  \"Moderate or heavy snow showers\": { ja: \"強いにわか雪\", emoji: \"🌨️\" },\n  \n  // 雷系\n  \"Thundery outbreaks possible\": { ja: \"雷の可能性\", emoji: \"⛈️\" },\n  \"Thundery outbreaks in nearby\": { ja: \"所により雷\", emoji: \"⛈️\" },\n  \"Patchy light rain with thunder\": { ja: \"雷を伴う小雨\", emoji: \"⛈️\" },\n  \"Patchy light rain in area with thunder\": { ja: \"所により雷雨\", emoji: \"⛈️\" },\n  \"Moderate or heavy rain with thunder\": { ja: \"雷雨\", emoji: \"⛈️\" },\n  \n  // みぞれ・あられ系\n  \"Ice pellets\": { ja: \"あられ\", emoji: \"🧊\" },\n  \"Light sleet\": { ja: \"みぞれ\", emoji: \"🌨️💧\" },\n  \"Moderate or heavy sleet\": { ja: \"強いみぞれ\", emoji: \"🌨️💧\" },\n  \"Light sleet showers\": { ja: \"にわかみぞれ\", emoji: \"🌨️💧\" },\n  \"Moderate or heavy sleet showers\": { ja: \"強いにわかみぞれ\", emoji: \"🌨️💧\" }\n};\n\n// 変換処理\nconst weatherInfo = weatherTranslations[englishWeather] || { \n  ja: englishWeather, \n  emoji: \"🌡️\" \n};\n\nreturn {\n  json: {\n    天気: `${weatherInfo.emoji} ${weatherInfo.ja}`,\n    天気日本語: weatherInfo.ja,\n    天気絵文字: weatherInfo.emoji,\n    天気英語: englishWeather\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "id": "0d854674-0bfa-43c4-b0a9-c88c2a904161",
+      "name": "日本語の天気取得"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "message",
+        "guildId": {
+          "__rl": true,
+          "value": "1387281980193767454",
+          "mode": "list",
+          "cachedResultName": "nabekou29の個人サーバー",
+          "cachedResultUrl": "https://discord.com/channels/1387281980193767454"
+        },
+        "channelId": {
+          "__rl": true,
+          "value": "1390387007410409522",
+          "mode": "list",
+          "cachedResultName": "時報",
+          "cachedResultUrl": "https://discord.com/channels/1387281980193767454/1390387007410409522"
+        },
+        "content": "=### 結月ゆかりが本日の天気をお知らせします\n\n天気: {{ $json['天気'] }}\n気温: {{ $json['現在の気温'] }}℃ ({{ $json['体感気温'] }}℃)\n最高/最低: {{ $json['最高気温'] }}℃ / {{ $json['最低気温'] }}℃\n湿度: {{ $json['湿度'] }}%\n\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [880, 0],
+      "id": "e6f6c63a-011f-45d6-820f-1ad87beeb247",
+      "name": "Send a message",
+      "webhookId": "6730732b-3003-4527-be81-41dee842a44c",
+      "credentials": {
+        "discordOAuth2Api": {
+          "id": "b6lgF6gYthOTgBic",
+          "name": "Discord Yukari "
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "66b8c4a3-1acc-42c8-9de7-66744ba5dea0",
+              "name": "現在の気温",
+              "value": "={{$node['wttr.in'].json.current_condition[0].temp_C}}",
+              "type": "string"
+            },
+            {
+              "id": "504d4129-8f7c-4b41-bb1c-bea59552dcfe",
+              "name": "天気",
+              "value": "={{ $node[\"日本語の天気取得\"].json['天気'] }}",
+              "type": "string"
+            },
+            {
+              "id": "326fde12-9c31-4fc6-baea-f962904ef524",
+              "name": "最高気温",
+              "value": "={{ $node['wttr.in'].json.weather[0].maxtempC }}",
+              "type": "string"
+            },
+            {
+              "id": "f24a4555-df49-4200-910d-b442a967d0e0",
+              "name": "最低気温",
+              "value": "={{ $node['wttr.in'].json.weather[0].mintempC }}",
+              "type": "string"
+            },
+            {
+              "id": "718a692a-612f-458c-acc0-1f9dabbf093f",
+              "name": "湿度",
+              "value": "={{ $node['wttr.in'].json.current_condition[0].humidity }}",
+              "type": "string"
+            },
+            {
+              "id": "1c8f182b-e9be-4ef5-9fcb-d27bb7fd69e3",
+              "name": "体感気温",
+              "value": "={{ $node['wttr.in'].json.current_condition[0].FeelsLikeC }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [660, 0],
+      "id": "475fcff6-7d59-446a-b0d8-7f8ec8f0d51d",
+      "name": "データ整形"
+    }
+  ],
+  "connections": {
+    "wttr.in": {
+      "main": [
+        [
+          {
+            "node": "日本語の天気取得",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger at 09:00": {
+      "main": [
+        [
+          {
+            "node": "wttr.in",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "日本語の天気取得": {
+      "main": [
+        [
+          {
+            "node": "データ整形",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "データ整形": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a956498ea839eacf15e20f0583bfa41581437490bcffa084e946a4c031fc46a1"
+  }
+}

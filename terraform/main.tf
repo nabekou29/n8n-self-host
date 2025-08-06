@@ -121,7 +121,7 @@ resource "google_cloud_run_v2_service" "n8n" {
       resources {
         limits = {
           cpu    = "1"
-          memory = "1Gi"
+          memory = "2Gi"
         }
 
         cpu_idle          = true
@@ -293,7 +293,7 @@ resource "google_cloud_run_domain_mapping" "n8n_domain" {
 resource "google_cloud_scheduler_job" "n8n_warmup" {
   name             = "n8n-instance-warmup"
   description      = "Warm up n8n instance before scheduled workflows"
-  schedule         = "55 * * * *" # Every hour at 55 minutes
+  schedule         = "55 8-20 * * *" # Every hour at 55 minutes
   time_zone        = "Asia/Tokyo"
   attempt_deadline = "30s"
 
